@@ -27,16 +27,27 @@
 
 #include "301/CO_driver.h"
 
+#include "device.h"
+#include "stm32f10x_gpio.h"
+#include "stm32f10x_rcc.h"
+#include "stm32f10x_can.h"
+#include "misc.h"
+#include "generic.h"
 /******************************************************************************/
 void CO_CANsetConfigurationMode(void *CANptr)
 {
 	/* Put CAN module in configuration mode */
+	CAN_ITConfig(CANptr, CAN_IT_FMP0, DISABLE);
+	CAN_ITConfig(CANptr, CAN_IT_TME, DISABLE);
+	CAN_DeInit(CANptr);
 }
 
 /******************************************************************************/
 void CO_CANsetNormalMode(CO_CANmodule_t *CANmodule)
 {
 	/* Put CAN module in normal mode */
+	CAN_ITConfig(CANmodule->CANptr, CAN_IT_FMP0, ENABLE);
+	CAN_ITConfig(CANmodule->CANptr, CAN_IT_TME, ENABLE);
 
 	CANmodule->CANnormal = true;
 }
@@ -61,7 +72,7 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	CANmodule->txSize = txSize;
 	CANmodule->CANerrorStatus = 0;
 	CANmodule->CANnormal = false;
-	CANmodule->useCANrxFilters = (rxSize <= 32U) ? true : false;/* microcontroller dependent */
+	CANmodule->useCANrxFilters = false;/* microcontroller dependent */
 	CANmodule->bufferInhibitFlag = false;
 	CANmodule->firstCANtxMessage = true;
 	CANmodule->CANtxCount = 0U;
@@ -80,8 +91,69 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	}
 
 	/* Configure CAN module registers */
-
 	/* Configure CAN timing */
+	CAN_DeInit(CAN1);
+
+	/* CAN GPIOs configuration */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_CAN1_GPIO_Periph, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+
+	// Config CAN RX pin
+	GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_InitStructure.GPIO_Pin = CAN1_RX_SOURCE;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(CAN1_GPIO_PORT, &GPIO_InitStructure);
+
+	// Config CAN TX pin
+	GPIO_InitStructure.GPIO_Pin = CAN1_TX_SOURCE;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(CAN1_GPIO_PORT, &GPIO_InitStructure);
+
+#ifdef CAN1_ReMap
+    GPIO_PinRemapConfig(GPIO_Remap1_CAN1, ENABLE);
+#endif
+
+	// Init CAN
+	CAN_InitTypeDef CAN_InitStructure;
+	CAN_StructInit(&CAN_InitStructure);
+
+    switch (CANbitRate)
+    {
+        case 1000: CAN_InitStructure.CAN_Prescaler = 2;
+            break;
+        case 500: CAN_InitStructure.CAN_Prescaler = 4;
+            break;
+        default:
+        case 250: CAN_InitStructure.CAN_Prescaler = 8;
+            break;
+        case 125: CAN_InitStructure.CAN_Prescaler = 16;
+            break;
+        case 100: CAN_InitStructure.CAN_Prescaler = 20;
+            break;
+        case 50: CAN_InitStructure.CAN_Prescaler = 40;
+            break;
+        case 20: CAN_InitStructure.CAN_Prescaler = 100;
+            break;
+        case 10: CAN_InitStructure.CAN_Prescaler = 200;
+            break;
+    }
+	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal;
+	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq;
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_15tq;
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq;
+	CAN_InitStructure.CAN_TTCM = DISABLE;
+	CAN_InitStructure.CAN_ABOM = DISABLE;
+	CAN_InitStructure.CAN_AWUM = DISABLE;
+	CAN_InitStructure.CAN_NART = ENABLE;
+	CAN_InitStructure.CAN_RFLM = DISABLE;
+	CAN_InitStructure.CAN_TXFP = DISABLE;
+
+	i = CAN_Init(CAN1, &CAN_InitStructure);
+	if(i == CAN_InitStatus_Failed)
+		return CO_ERROR_INVALID_STATE;
 
 	/* Configure CAN module hardware filters */
 	if (CANmodule->useCANrxFilters)
@@ -96,9 +168,30 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 		/* CAN module filters are not used, all messages with standard 11-bit */
 		/* identifier will be received */
 		/* Configure mask 0 so, that all messages with standard identifier are accepted */
+		CAN_FilterInitTypeDef CAN_FilterInitStructure;
+		CAN_FilterInitStructure.CAN_FilterNumber = 0;
+		CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;
+		CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_32bit;
+		CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0b0000000000011111; // mask extended ids
+		CAN_FilterInitStructure.CAN_FilterIdHigh =  0x0;
+		CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0b1111111111111000; // mask extended ids
+		CAN_FilterInitStructure.CAN_FilterIdLow = 0x0;
+		CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_FIFO0;
+		CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
+		CAN_FilterInit(&CAN_FilterInitStructure);
 	}
 
 	/* configure CAN interrupt registers */
+	CAN_ITConfig(CANmodule->CANptr, CAN_IT_FMP0, ENABLE);
+	CAN_ITConfig(CANmodule->CANptr, CAN_IT_TME, ENABLE);
+	NVIC_InitTypeDef NVIC_InitStructure;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_InitStructure.NVIC_IRQChannel = USB_LP_CAN1_RX0_IRQn;
+	NVIC_Init(&NVIC_InitStructure);
+	NVIC_InitStructure.NVIC_IRQChannel = USB_HP_CAN1_TX_IRQn;
+	NVIC_Init(&NVIC_InitStructure);
 
 	return CO_ERROR_NO;
 }
@@ -109,6 +202,7 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 	if (CANmodule != NULL)
 	{
 		/* turn off the module */
+		CO_CANsetConfigurationMode(CANmodule->CANptr);
 	}
 }
 
@@ -170,6 +264,11 @@ CO_CANtx_t* CO_CANtxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, uint16
 	return buffer;
 }
 
+uint32_t CAN_IsMailboxFree(CAN_TypeDef *CANptr)
+{
+	return (CANptr->TSR & CAN_TSR_TME) != 0;
+}
+
 /******************************************************************************/
 CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 {
@@ -188,17 +287,22 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 
 	CO_LOCK_CAN_SEND(CANmodule);
 	/* if CAN TX buffer is free, copy message to it */
-	if (1 && CANmodule->CANtxCount == 0)
+	if (CAN_IsMailboxFree(CANmodule->CANptr) && CANmodule->CANtxCount == 0)
 	{
 		CANmodule->bufferInhibitFlag = buffer->syncFlag;
 		/* copy message and txRequest */
+		CanTxMsg txMsg;
+		txMsg.StdId = buffer->ident;
+		txMsg.DLC = buffer->DLC;
+		array_copy_8(txMsg.Data, buffer->data, txMsg.DLC);
+		CAN_Transmit(CANmodule->CANptr, &txMsg);
 	}
 	/* if no buffer is free, message will be sent by interrupt */
 	else
 	{
 		buffer->bufferFull = true;
 		CANmodule->CANtxCount++;
-	} CO_UNLOCK_CAN_SEND(CANmodule);
+	}CO_UNLOCK_CAN_SEND(CANmodule);
 
 	return err;
 }
@@ -235,7 +339,7 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 			}
 			buffer++;
 		}
-	} CO_UNLOCK_CAN_SEND(CANmodule);
+	}CO_UNLOCK_CAN_SEND(CANmodule);
 
 	if (tpdoDeleted != 0U)
 	{
@@ -308,109 +412,101 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 }
 
 /******************************************************************************/
-typedef struct
+void CO_CANinterruptRx(CO_CANmodule_t *CANmodule)
 {
-	uint32_t ident;
-	uint8_t DLC;
-	uint8_t data[8];
-} CO_CANrxMsg_t;
-
-void CO_CANinterrupt(CO_CANmodule_t *CANmodule)
-{
-
 	/* receive interrupt */
-	if (1)
+
+	CanRxMsg rcvMsg; /* received message in CAN module */
+	uint16_t index; /* index of received message */
+	uint32_t rcvMsgIdent; /* identifier of the received message */
+	CO_CANrx_t *buffer = NULL; /* receive message buffer from CO_CANmodule_t object. */
+	bool_t msgMatched = false;
+
+	/* get message from module here */
+	CAN_Receive(CANmodule->CANptr, CAN_FIFO0, &rcvMsg);
+	rcvMsgIdent = rcvMsg.StdId;
+	if (CANmodule->useCANrxFilters)
 	{
-		CO_CANrxMsg_t *rcvMsg; /* pointer to received message in CAN module */
-		uint16_t index; /* index of received message */
-		uint32_t rcvMsgIdent; /* identifier of the received message */
-		CO_CANrx_t *buffer = NULL; /* receive message buffer from CO_CANmodule_t object. */
-		bool_t msgMatched = false;
-
-		rcvMsg = 0; /* get message from module here */
-		rcvMsgIdent = rcvMsg->ident;
-		if (CANmodule->useCANrxFilters)
+		/* CAN module filters are used. Message with known 11-bit identifier has */
+		/* been received */
+		index = 0; /* get index of the received message here. Or something similar */
+		if (index < CANmodule->rxSize)
 		{
-			/* CAN module filters are used. Message with known 11-bit identifier has */
-			/* been received */
-			index = 0; /* get index of the received message here. Or something similar */
-			if (index < CANmodule->rxSize)
+			buffer = &CANmodule->rxArray[index];
+			/* verify also RTR */
+			if (((rcvMsgIdent ^ buffer->ident) & buffer->mask) == 0U)
 			{
-				buffer = &CANmodule->rxArray[index];
-				/* verify also RTR */
-				if (((rcvMsgIdent ^ buffer->ident) & buffer->mask) == 0U)
-				{
-					msgMatched = true;
-				}
-			}
-		}
-		else
-		{
-			/* CAN module filters are not used, message with any standard 11-bit identifier */
-			/* has been received. Search rxArray form CANmodule for the same CAN-ID. */
-			buffer = &CANmodule->rxArray[0];
-			for (index = CANmodule->rxSize; index > 0U; index--)
-			{
-				if (((rcvMsgIdent ^ buffer->ident) & buffer->mask) == 0U)
-				{
-					msgMatched = true;
-					break;
-				}
-				buffer++;
-			}
-		}
-
-		/* Call specific function, which will process the message */
-		if (msgMatched && (buffer != NULL) && (buffer->CANrx_callback != NULL))
-		{
-			buffer->CANrx_callback(buffer->object, (void*) rcvMsg);
-		}
-
-		/* Clear interrupt flag */
-	}
-
-	/* transmit interrupt */
-	else if (0)
-	{
-		/* Clear interrupt flag */
-
-		/* First CAN message (bootup) was sent successfully */
-		CANmodule->firstCANtxMessage = false;
-		/* clear flag from previous message */
-		CANmodule->bufferInhibitFlag = false;
-		/* Are there any new messages waiting to be send */
-		if (CANmodule->CANtxCount > 0U)
-		{
-			uint16_t i; /* index of transmitting message */
-
-			/* first buffer */
-			CO_CANtx_t *buffer = &CANmodule->txArray[0];
-			/* search through whole array of pointers to transmit message buffers. */
-			for (i = CANmodule->txSize; i > 0U; i--)
-			{
-				/* if message buffer is full, send it. */
-				if (buffer->bufferFull)
-				{
-					buffer->bufferFull = false;
-					CANmodule->CANtxCount--;
-
-					/* Copy message to CAN buffer */
-					CANmodule->bufferInhibitFlag = buffer->syncFlag;
-					/* canSend... */
-					break; /* exit for loop */
-				}
-				buffer++;
-			}/* end of for loop */
-
-			/* Clear counter if no more messages */
-			if (i == 0U)
-			{
-				CANmodule->CANtxCount = 0U;
+				msgMatched = true;
 			}
 		}
 	}
 	else
 	{
-		/* some other interrupt reason */
+		/* CAN module filters are not used, message with any standard 11-bit identifier */
+		/* has been received. Search rxArray form CANmodule for the same CAN-ID. */
+		buffer = &CANmodule->rxArray[0];
+		for (index = CANmodule->rxSize; index > 0U; index--)
+		{
+			if (((rcvMsgIdent ^ buffer->ident) & buffer->mask) == 0U)
+			{
+				msgMatched = true;
+				break;
+			}
+			buffer++;
+		}
+	}
+
+	/* Call specific function, which will process the message */
+	if (msgMatched && (buffer != NULL) && (buffer->CANrx_callback != NULL))
+	{
+		buffer->CANrx_callback(buffer->object, &rcvMsg);
+	}
+
+	/* Clear interrupt flag */
+	//cleared automatically on CAN_Receive()
+}
+
+void CO_CANinterruptTx(CO_CANmodule_t *CANmodule)
+{
+	/* transmit interrupt */
+
+	/* Clear interrupt flag */
+	//automatically clears on CAN_Transmit()
+
+	/* First CAN message (bootup) was sent successfully */
+	CANmodule->firstCANtxMessage = false;
+	/* clear flag from previous message */
+	CANmodule->bufferInhibitFlag = false;
+	/* Are there any new messages waiting to be send */
+	if (CANmodule->CANtxCount > 0U)
+	{
+		uint16_t i; /* index of transmitting message */
+
+		/* first buffer */
+		CO_CANtx_t *buffer = &CANmodule->txArray[0];
+		/* search through whole array of pointers to transmit message buffers. */
+		for (i = CANmodule->txSize; i > 0U; i--)
+		{
+			/* if message buffer is full, send it. */
+			if (buffer->bufferFull)
+			{
+				buffer->bufferFull = false;
+				CANmodule->CANtxCount--;
+
+				/* Copy message to CAN buffer */
+				CANmodule->bufferInhibitFlag = buffer->syncFlag;
+
+				/* canSend... */
+				CO_CANsend(CANmodule, buffer);
+				break; /* exit for loop */
+			}
+			buffer++;
+		}/* end of for loop */
+
+		/* Clear counter if no more messages */
+		if (i == 0U)
+		{
+			CANmodule->CANtxCount = 0U;
+		}
 	}
 }

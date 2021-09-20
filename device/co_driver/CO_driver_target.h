@@ -32,6 +32,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "stm32f10x_can.h"
 
 #ifdef CO_DRIVER_CUSTOM
 #include "CO_driver_custom.h"
@@ -61,9 +62,9 @@ typedef float float32_t;
 typedef double float64_t;
 
 /* Access to received CAN message */
-#define CO_CANrxMsg_readIdent(msg) ((uint16_t)0)
-#define CO_CANrxMsg_readDLC(msg)   ((uint8_t)0)
-#define CO_CANrxMsg_readData(msg)  ((uint8_t *)NULL)
+#define CO_CANrxMsg_readIdent(msg) ((uint16_t)((CanRxMsg*)msg)->StdId)
+#define CO_CANrxMsg_readData(msg)  ((uint8_t *)((CanRxMsg*)msg)->Data)
+#define CO_CANrxMsg_readDLC(msg)   ((uint8_t)((CanRxMsg*)msg)->DLC)
 
 /* Received message object */
 typedef struct
@@ -113,19 +114,19 @@ typedef struct
 } CO_storage_entry_t;
 
 /* (un)lock critical section in CO_CANsend() */
-#define CO_LOCK_CAN_SEND(CAN_MODULE)
-#define CO_UNLOCK_CAN_SEND(CAN_MODULE)
+#define CO_LOCK_CAN_SEND(CAN_MODULE) __disable_irq()
+#define CO_UNLOCK_CAN_SEND(CAN_MODULE) __enable_irq()
 
 /* (un)lock critical section in CO_errorReport() or CO_errorReset() */
-#define CO_LOCK_EMCY(CAN_MODULE)
-#define CO_UNLOCK_EMCY(CAN_MODULE)
+#define CO_LOCK_EMCY(CAN_MODULE) CO_LOCK_CAN_SEND(CAN_MODULE)
+#define CO_UNLOCK_EMCY(CAN_MODULE) CO_UNLOCK_CAN_SEND(CAN_MODULE)
 
 /* (un)lock critical section when accessing Object Dictionary */
-#define CO_LOCK_OD(CAN_MODULE)
-#define CO_UNLOCK_OD(CAN_MODULE)
+#define CO_LOCK_OD(CAN_MODULE) CO_LOCK_CAN_SEND(CAN_MODULE)
+#define CO_UNLOCK_OD(CAN_MODULE) CO_UNLOCK_CAN_SEND(CAN_MODULE)
 
 /* Synchronization between CAN receive and message processing threads. */
-#define CO_MemoryBarrier()
+#define CO_MemoryBarrier() __DMB()
 #define CO_FLAG_READ(rxNew) ((rxNew) != NULL)
 #define CO_FLAG_SET(rxNew) {CO_MemoryBarrier(); rxNew = (void*)1L;}
 #define CO_FLAG_CLEAR(rxNew) {CO_MemoryBarrier(); rxNew = NULL;}
