@@ -26,13 +26,14 @@
 
 
 #include <stdio.h>
+#include "device_config.h"
+#include "by_can.h"
 
 #include "CANopen.h"
 #include "OD.h"
 
 #define log_printf(macropar_message, ...) \
         printf(macropar_message, ##__VA_ARGS__)
-
 
 /* default values for CO_CANopenInit() */
 #define NMT_CONTROL \
@@ -49,6 +50,8 @@
 
 /* Global variables and objects */
 CO_t *CO = NULL; /* CANopen object */
+volatile uint32_t co_timer_us = 0; //updates in SysTick
+
 uint8_t LED_red, LED_green;
 
 
@@ -57,10 +60,10 @@ int main (void){
     CO_ReturnError_t err;
     CO_NMT_reset_cmd_t reset = CO_RESET_NOT;
     uint32_t heapMemoryUsed;
-    void *CANptr = NULL; /* CAN module address */
+    void *CANptr = CAN1; /* CAN module address */
     uint8_t pendingNodeId = 10; /* read from dip switches or nonvolatile memory, configurable by LSS slave */
     uint8_t activeNodeId = 10; /* Copied from CO_pendingNodeId in the communication reset section */
-    uint16_t pendingBitRate = 125;  /* read from dip switches or nonvolatile memory, configurable by LSS slave */
+    uint16_t pendingBitRate = 500;  /* read from dip switches or nonvolatile memory, configurable by LSS slave */
 
 #if (CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE
     CO_storage_t storage;
@@ -78,7 +81,7 @@ int main (void){
 #endif
 
     /* Configure microcontroller. */
-
+    Device_GPIO_Init();
 
     /* Allocate memory */
     CO_config_t *config_ptr = NULL;
@@ -96,7 +99,7 @@ int main (void){
         return 0;
     }
     else {
-        log_printf("Allocated %u bytes for CANopen objects\n", heapMemoryUsed);
+        log_printf("Allocated %lu bytes for CANopen objects\n", heapMemoryUsed);
     }
 
 
@@ -163,7 +166,7 @@ int main (void){
                              &errInfo);
         if(err != CO_ERROR_NO && err != CO_ERROR_NODE_ID_UNCONFIGURED_LSS) {
             if (err == CO_ERROR_OD_PARAMETERS) {
-                log_printf("Error: Object Dictionary entry 0x%X\n", errInfo);
+				log_printf("Error: Object Dictionary entry 0x%X\n", (unsigned int)errInfo);
             }
             else {
                 log_printf("Error: CANopen initialization failed: %d\n", err);
@@ -174,7 +177,7 @@ int main (void){
         err = CO_CANopenInitPDO(CO, CO->em, OD, activeNodeId, &errInfo);
         if(err != CO_ERROR_NO) {
             if (err == CO_ERROR_OD_PARAMETERS) {
-                log_printf("Error: Object Dictionary entry 0x%X\n", errInfo);
+				log_printf("Error: Object Dictionary entry 0x%X\n", (unsigned int)errInfo);
             }
             else {
                 log_printf("Error: PDO initialization failed: %d\n", err);
@@ -183,10 +186,10 @@ int main (void){
         }
 
         /* Configure Timer interrupt function for execution every 1 millisecond */
-
+        Device_Timer_Init();
 
         /* Configure CAN transmit and receive interrupt */
-
+        CAN1_IT_Init();
 
         /* Configure CANopen callbacks, etc */
         if(!CO->nodeIdUnconfigured) {
@@ -202,7 +205,6 @@ int main (void){
             log_printf("CANopenNode - Node-id not initialized\n");
         }
 
-
         /* start CAN */
         CO_CANsetNormalMode(CO->CANmodule);
 
@@ -211,15 +213,18 @@ int main (void){
         log_printf("CANopenNode - Running...\n");
         fflush(stdout);
 
+        uint32_t time_prev = co_timer_us;
+
         while(reset == CO_RESET_NOT){
 /* loop for normal program execution ******************************************/
             /* get time difference since last function call */
-            uint32_t timeDifference_us = 500;
+            uint32_t timeDifference_us = co_timer_us - time_prev;
+            time_prev = co_timer_us;
 
             /* CANopen process */
             reset = CO_process(CO, false, timeDifference_us, NULL);
-//            LED_red = CO_LED_RED(CO->LEDs, CO_LED_CANopen);
-//            LED_green = CO_LED_GREEN(CO->LEDs, CO_LED_CANopen);
+            // LED_red = CO_LED_RED(CO->LEDs, CO_LED_CANopen);
+            // LED_green = CO_LED_GREEN(CO->LEDs, CO_LED_CANopen);
 
             /* Nonblocking application code may go here. */
 
@@ -229,10 +234,8 @@ int main (void){
         }
     }
 
-
 /* program exit ***************************************************************/
     /* stop threads */
-
 
     /* delete objects from memory */
     CO_CANsetConfigurationMode((void *)&CANptr);
@@ -242,38 +245,4 @@ int main (void){
 
     /* reset */
     return 0;
-}
-
-
-/* timer thread executes in constant intervals ********************************/
-void tmrTask_thread(void){
-
-    for(;;) {
-        CO_LOCK_OD(CO->CANmodule);
-        if (!CO->nodeIdUnconfigured && CO->CANmodule->CANnormal) {
-            bool_t syncWas = false;
-            /* get time difference since last function call */
-            uint32_t timeDifference_us = 1000;
-
-#if (CO_CONFIG_SYNC) & CO_CONFIG_SYNC_ENABLE
-            syncWas = CO_process_SYNC(CO, timeDifference_us, NULL);
-#endif
-#if (CO_CONFIG_PDO) & CO_CONFIG_RPDO_ENABLE
-            CO_process_RPDO(CO, syncWas, timeDifference_us, NULL);
-#endif
-#if (CO_CONFIG_PDO) & CO_CONFIG_TPDO_ENABLE
-            CO_process_TPDO(CO, syncWas, timeDifference_us, NULL);
-#endif
-
-            /* Further I/O or nonblocking application code may go here. */
-        }
-        CO_UNLOCK_OD(CO->CANmodule);
-    }
-}
-
-
-/* CAN interrupt function executes on received CAN message ********************/
-void /* interrupt */ CO_CAN1InterruptHandler(void){
-
-    /* clear interrupt flag */
 }

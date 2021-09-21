@@ -50,6 +50,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32_it.h"
+#include "stm32f10x_tim.h"
+#include "stm32f10x_can.h"
+#include "device.h"
+#include "generic.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -61,11 +65,11 @@
 /******************************************************************************/
 /*            Cortex-M Processor Exceptions Handlers                         */
 /******************************************************************************/
-#include "stm32f10x_can.h"
 #include "CANopen.h"
 extern CO_t *CO;
 void USB_LP_CAN_RX0_IRQHandler()
 {
+	/* CAN interrupt function executes on received CAN message */
 	if (CAN_GetITStatus(CAN1, CAN_IT_FMP0) != RESET)
 	{
 		CO_CANinterruptRx(CO->CANmodule);
@@ -79,6 +83,23 @@ void USB_HP_CAN_TX_IRQHandler()
 		CO_CANinterruptTx(CO->CANmodule);
 	}
 }
+
+void TIM4_IRQHandler()
+{
+	static uint32_t tim_counter = 0;
+	if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
+	{
+		tim_counter++;
+
+		if(tim_counter == 10) // 1 second
+		{
+			GPIO_ToggleBits(GPIOC, PIN_LED);
+			tim_counter = 0;
+		}
+		TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+	}
+}
+
 
 /*******************************************************************************
  * Function Name  : NMI_Handler
@@ -191,8 +212,30 @@ void PendSV_Handler(void)
  * Output         : None
  * Return         : None
  *******************************************************************************/
+extern volatile uint32_t co_timer_us;
 void SysTick_Handler(void)
 {
+/* timer thread executes in constant intervals in SysTick interrupt handler */
+	CO_LOCK_OD(CO->CANmodule);
+	if (!CO->nodeIdUnconfigured && CO->CANmodule->CANnormal)
+	{
+		bool_t syncWas = false;
+		/* get time difference since last function call */
+		uint32_t timeDifference_us = 1000;
+		co_timer_us += timeDifference_us;
+
+#if (CO_CONFIG_SYNC) & CO_CONFIG_SYNC_ENABLE
+		syncWas = CO_process_SYNC(CO, timeDifference_us, NULL);
+#endif
+#if (CO_CONFIG_PDO) & CO_CONFIG_RPDO_ENABLE
+		CO_process_RPDO(CO, syncWas, timeDifference_us, NULL);
+#endif
+#if (CO_CONFIG_PDO) & CO_CONFIG_TPDO_ENABLE
+		CO_process_TPDO(CO, syncWas, timeDifference_us, NULL);
+#endif
+		/* Further I/O or nonblocking application code may go here. */
+	}
+	CO_UNLOCK_OD(CO->CANmodule);
 }
 
 /******************************************************************************/

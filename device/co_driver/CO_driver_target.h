@@ -131,6 +131,10 @@ typedef struct
 #define CO_FLAG_SET(rxNew) {CO_MemoryBarrier(); rxNew = (void*)1L;}
 #define CO_FLAG_CLEAR(rxNew) {CO_MemoryBarrier(); rxNew = NULL;}
 
+/* Function prototypes */
+void CO_CANinterruptRx(CO_CANmodule_t *CANmodule);
+void CO_CANinterruptTx(CO_CANmodule_t *CANmodule);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
