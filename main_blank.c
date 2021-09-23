@@ -26,8 +26,10 @@
 
 
 #include <stdio.h>
+#include "device.h"
 #include "device_config.h"
 #include "by_can.h"
+#include "generic.h"
 
 #include "CANopen.h"
 #include "OD.h"
@@ -224,11 +226,12 @@ int main (void){
 
             /* CANopen process */
             static uint32_t timer_next_us = 5000;
-            reset = CO_process(CO, false, timeDifference_us, &timer_next_us);
-            // LED_red = CO_LED_RED(CO->LEDs, CO_LED_CANopen);
-            // LED_green = CO_LED_GREEN(CO->LEDs, CO_LED_CANopen);
+			reset = CO_process(CO, false, timeDifference_us, &timer_next_us);
+			// LED_red = CO_LED_RED(CO->LEDs, CO_LED_CANopen);
+			LED_green = CO_LED_GREEN(CO->LEDs, CO_LED_CANopen);
 
             /* Nonblocking application code may go here. */
+			GPIO_WriteBit(GPIOC, PIN_LED, LED_green ? Bit_RESET : Bit_SET);
 
             /* Process automatic storage */
 

@@ -93,7 +93,6 @@ void TIM4_IRQHandler()
 
 		if(tim_counter == 10) // 1 second
 		{
-			GPIO_ToggleBits(GPIOC, PIN_LED);
 			tim_counter = 0;
 		}
 		TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
