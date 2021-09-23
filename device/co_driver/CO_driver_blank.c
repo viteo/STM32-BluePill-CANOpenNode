@@ -180,8 +180,8 @@ CO_CANtx_t* CO_CANtxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, uint16
 
 		/* CAN identifier, DLC and rtr, bit aligned with CAN module transmit buffer.
 		 * Microcontroller specific. */
-		buffer->ident = ((uint32_t) ident & 0x07FFU) | ((uint32_t) (((uint32_t) noOfBytes & 0xFU) << 12U)) | ((uint32_t) (rtr ? 0x8000U : 0U));
-
+		buffer->ident = ((uint32_t) ident & 0x07FFU) | ((uint32_t) (rtr ? 0x8000U : 0U));
+		buffer->DLC = noOfBytes & 0xFU;
 		buffer->bufferFull = false;
 		buffer->syncFlag = syncFlag;
 	}
