@@ -25,12 +25,14 @@ OD_ATTR_PERSIST_COMM OD_PERSIST_COMM_t OD_PERSIST_COMM = {
     .x1005_COB_ID_SYNCMessage = 0x00000080,
     .x1006_communicationCyclePeriod = 0x00000000,
     .x1007_synchronousWindowLength = 0x00000000,
-    .x1012_COB_IDTimeStampObject = 0x00000100,
+    .x1008_manufacturerDeviceName = {'C', 'A', 'N', 'O', 'p', 'e', 'n', 'N', 'o', 'd', 'e', 0},
+    .x1009_manufacturerHardwareVersion = {'2', '.', '0', '0', 0},
+    .x100A_manufacturerSoftwareVersion = {'1', '.', '0', '0', 0},
     .x1014_COB_ID_EMCY = 0x00000080,
-    .x1015_inhibitTimeEMCY = 0x0000,
+    .x1015_inhibitTimeEMCY = 0x0064,
     .x1016_consumerHeartbeatTime_sub0 = 0x08,
     .x1016_consumerHeartbeatTime = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000},
-    .x1017_producerHeartbeatTime = 0x0000,
+    .x1017_producerHeartbeatTime = 0x03E8,
     .x1018_identity = {
         .highestSub_indexSupported = 0x04,
         .vendor_ID = 0x00000000,
@@ -193,10 +195,6 @@ OD_ATTR_PERSIST_COMM OD_PERSIST_COMM_t OD_PERSIST_COMM = {
 
 OD_ATTR_RAM OD_RAM_t OD_RAM = {
     .x1001_errorRegister = 0x00,
-    .x1010_storeParameters_sub0 = 0x04,
-    .x1010_storeParameters = {0x00000001, 0x00000001, 0x00000001, 0x00000001},
-    .x1011_restoreDefaultParameters_sub0 = 0x04,
-    .x1011_restoreDefaultParameters = {0x00000001, 0x00000001, 0x00000001, 0x00000001},
     .x1200_SDOServerParameter = {
         .highestSub_indexSupported = 0x02,
         .COB_IDClientToServerRx = 0x00000600,
@@ -216,9 +214,9 @@ typedef struct {
     OD_obj_var_t o_1005_COB_ID_SYNCMessage;
     OD_obj_var_t o_1006_communicationCyclePeriod;
     OD_obj_var_t o_1007_synchronousWindowLength;
-    OD_obj_array_t o_1010_storeParameters;
-    OD_obj_array_t o_1011_restoreDefaultParameters;
-    OD_obj_var_t o_1012_COB_IDTimeStampObject;
+    OD_obj_var_t o_1008_manufacturerDeviceName;
+    OD_obj_var_t o_1009_manufacturerHardwareVersion;
+    OD_obj_var_t o_100A_manufacturerSoftwareVersion;
     OD_obj_var_t o_1014_COB_ID_EMCY;
     OD_obj_var_t o_1015_inhibitTimeEMCY;
     OD_obj_array_t o_1016_consumerHeartbeatTime;
@@ -253,7 +251,7 @@ static CO_PROGMEM ODObjs_t ODObjs = {
     },
     .o_1001_errorRegister = {
         .dataOrig = &OD_RAM.x1001_errorRegister,
-        .attribute = ODA_SDO_R | ODA_TPDO,
+        .attribute = ODA_SDO_R | ODA_TRPDO,
         .dataLength = 1
     },
     .o_1003_pre_definedErrorField = {
@@ -279,25 +277,19 @@ static CO_PROGMEM ODObjs_t ODObjs = {
         .attribute = ODA_SDO_RW | ODA_MB,
         .dataLength = 4
     },
-    .o_1010_storeParameters = {
-        .dataOrig0 = &OD_RAM.x1010_storeParameters_sub0,
-        .dataOrig = &OD_RAM.x1010_storeParameters[0],
-        .attribute0 = ODA_SDO_R,
-        .attribute = ODA_SDO_RW | ODA_MB,
-        .dataElementLength = 4,
-        .dataElementSizeof = sizeof(uint32_t)
+    .o_1008_manufacturerDeviceName = {
+        .dataOrig = &OD_PERSIST_COMM.x1008_manufacturerDeviceName[0],
+        .attribute = ODA_SDO_R | ODA_STR,
+        .dataLength = 11
     },
-    .o_1011_restoreDefaultParameters = {
-        .dataOrig0 = &OD_RAM.x1011_restoreDefaultParameters_sub0,
-        .dataOrig = &OD_RAM.x1011_restoreDefaultParameters[0],
-        .attribute0 = ODA_SDO_R,
-        .attribute = ODA_SDO_RW | ODA_MB,
-        .dataElementLength = 4,
-        .dataElementSizeof = sizeof(uint32_t)
+    .o_1009_manufacturerHardwareVersion = {
+        .dataOrig = &OD_PERSIST_COMM.x1009_manufacturerHardwareVersion[0],
+        .attribute = ODA_SDO_R | ODA_STR,
+        .dataLength = 4
     },
-    .o_1012_COB_IDTimeStampObject = {
-        .dataOrig = &OD_PERSIST_COMM.x1012_COB_IDTimeStampObject,
-        .attribute = ODA_SDO_RW | ODA_MB,
+    .o_100A_manufacturerSoftwareVersion = {
+        .dataOrig = &OD_PERSIST_COMM.x100A_manufacturerSoftwareVersion[0],
+        .attribute = ODA_SDO_R | ODA_STR,
         .dataLength = 4
     },
     .o_1014_COB_ID_EMCY = {
@@ -1123,9 +1115,9 @@ static OD_ATTR_OD OD_entry_t ODList[] = {
     {0x1005, 0x01, ODT_VAR, &ODObjs.o_1005_COB_ID_SYNCMessage, NULL},
     {0x1006, 0x01, ODT_VAR, &ODObjs.o_1006_communicationCyclePeriod, NULL},
     {0x1007, 0x01, ODT_VAR, &ODObjs.o_1007_synchronousWindowLength, NULL},
-    {0x1010, 0x05, ODT_ARR, &ODObjs.o_1010_storeParameters, NULL},
-    {0x1011, 0x05, ODT_ARR, &ODObjs.o_1011_restoreDefaultParameters, NULL},
-    {0x1012, 0x01, ODT_VAR, &ODObjs.o_1012_COB_IDTimeStampObject, NULL},
+    {0x1008, 0x01, ODT_VAR, &ODObjs.o_1008_manufacturerDeviceName, NULL},
+    {0x1009, 0x01, ODT_VAR, &ODObjs.o_1009_manufacturerHardwareVersion, NULL},
+    {0x100A, 0x01, ODT_VAR, &ODObjs.o_100A_manufacturerSoftwareVersion, NULL},
     {0x1014, 0x01, ODT_VAR, &ODObjs.o_1014_COB_ID_EMCY, NULL},
     {0x1015, 0x01, ODT_VAR, &ODObjs.o_1015_inhibitTimeEMCY, NULL},
     {0x1016, 0x09, ODT_ARR, &ODObjs.o_1016_consumerHeartbeatTime, NULL},

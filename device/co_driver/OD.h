@@ -11,12 +11,12 @@
 
     File info:
         File Names:   OD.h; OD.c
-        Project File: DS301_profile.xpd
+        Project File: ds301.xdd
         File Version: 1
 
-        Created:      23. 11. 2020 13:00:00
+        Created:      23.09.2021 13:05:57
         Created By:   
-        Modified:     9. 08. 2021 18:39:55
+        Modified:     23.09.2021 13:22:30
         Modified By:  
 
     Device Info:
@@ -37,8 +37,6 @@
 #define OD_CNT_EM 1
 #define OD_CNT_SYNC 1
 #define OD_CNT_SYNC_PROD 1
-#define OD_CNT_STORAGE 1
-#define OD_CNT_TIME 1
 #define OD_CNT_EM_PROD 1
 #define OD_CNT_HB_CONS 1
 #define OD_CNT_HB_PROD 1
@@ -52,8 +50,6 @@
     Sizes of OD arrays
 *******************************************************************************/
 #define OD_CNT_ARR_1003 16
-#define OD_CNT_ARR_1010 4
-#define OD_CNT_ARR_1011 4
 #define OD_CNT_ARR_1016 8
 
 
@@ -65,7 +61,9 @@ typedef struct {
     uint32_t x1005_COB_ID_SYNCMessage;
     uint32_t x1006_communicationCyclePeriod;
     uint32_t x1007_synchronousWindowLength;
-    uint32_t x1012_COB_IDTimeStampObject;
+    char x1008_manufacturerDeviceName[12];
+    char x1009_manufacturerHardwareVersion[5];
+    char x100A_manufacturerSoftwareVersion[5];
     uint32_t x1014_COB_ID_EMCY;
     uint16_t x1015_inhibitTimeEMCY;
     uint8_t x1016_consumerHeartbeatTime_sub0;
@@ -233,10 +231,6 @@ typedef struct {
 
 typedef struct {
     uint8_t x1001_errorRegister;
-    uint8_t x1010_storeParameters_sub0;
-    uint32_t x1010_storeParameters[OD_CNT_ARR_1010];
-    uint8_t x1011_restoreDefaultParameters_sub0;
-    uint32_t x1011_restoreDefaultParameters[OD_CNT_ARR_1011];
     struct {
         uint8_t highestSub_indexSupported;
         uint32_t COB_IDClientToServerRx;
@@ -269,9 +263,9 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H1005 &OD->list[3]
 #define OD_ENTRY_H1006 &OD->list[4]
 #define OD_ENTRY_H1007 &OD->list[5]
-#define OD_ENTRY_H1010 &OD->list[6]
-#define OD_ENTRY_H1011 &OD->list[7]
-#define OD_ENTRY_H1012 &OD->list[8]
+#define OD_ENTRY_H1008 &OD->list[6]
+#define OD_ENTRY_H1009 &OD->list[7]
+#define OD_ENTRY_H100A &OD->list[8]
 #define OD_ENTRY_H1014 &OD->list[9]
 #define OD_ENTRY_H1015 &OD->list[10]
 #define OD_ENTRY_H1016 &OD->list[11]
@@ -307,9 +301,9 @@ extern OD_ATTR_OD OD_t *OD;
 #define OD_ENTRY_H1005_COB_ID_SYNCMessage &OD->list[3]
 #define OD_ENTRY_H1006_communicationCyclePeriod &OD->list[4]
 #define OD_ENTRY_H1007_synchronousWindowLength &OD->list[5]
-#define OD_ENTRY_H1010_storeParameters &OD->list[6]
-#define OD_ENTRY_H1011_restoreDefaultParameters &OD->list[7]
-#define OD_ENTRY_H1012_COB_IDTimeStampObject &OD->list[8]
+#define OD_ENTRY_H1008_manufacturerDeviceName &OD->list[6]
+#define OD_ENTRY_H1009_manufacturerHardwareVersion &OD->list[7]
+#define OD_ENTRY_H100A_manufacturerSoftwareVersion &OD->list[8]
 #define OD_ENTRY_H1014_COB_ID_EMCY &OD->list[9]
 #define OD_ENTRY_H1015_inhibitTimeEMCY &OD->list[10]
 #define OD_ENTRY_H1016_consumerHeartbeatTime &OD->list[11]
@@ -356,7 +350,7 @@ extern OD_ATTR_OD OD_t *OD;
     (config).ENTRY_H1200 = OD_ENTRY_H1200;\
     (config).CNT_SDO_CLI = OD_CNT_SDO_CLI;\
     (config).ENTRY_H1280 = OD_ENTRY_H1280;\
-    (config).CNT_TIME = OD_CNT_TIME;\
+    (config).CNT_TIME = 0;\
     (config).ENTRY_H1012 = OD_ENTRY_H1012;\
     (config).CNT_SYNC = OD_CNT_SYNC;\
     (config).ENTRY_H1005 = OD_ENTRY_H1005;\

@@ -223,7 +223,8 @@ int main (void){
             time_prev = co_timer_us;
 
             /* CANopen process */
-            reset = CO_process(CO, false, timeDifference_us, NULL);
+            static uint32_t timer_next_us = 5000;
+            reset = CO_process(CO, false, timeDifference_us, &timer_next_us);
             // LED_red = CO_LED_RED(CO->LEDs, CO_LED_CANopen);
             // LED_green = CO_LED_GREEN(CO->LEDs, CO_LED_CANopen);
 
