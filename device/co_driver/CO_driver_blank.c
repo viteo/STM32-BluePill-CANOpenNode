@@ -211,11 +211,11 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 	{
 		CANmodule->bufferInhibitFlag = buffer->syncFlag;
 		/* copy message and txRequest */
-		CanTxMsg txMsg;
+		CanTxMsg txMsg = {0};
 		txMsg.StdId = buffer->ident;
 		txMsg.DLC = buffer->DLC;
 		array_copy_8(txMsg.Data, buffer->data, txMsg.DLC);
-		CAN_Transmit(CANmodule->CANptr, &txMsg);
+		CAN_Transmit(CAN1, &txMsg);
 	}
 	/* if no buffer is free, message will be sent by interrupt */
 	else
@@ -235,9 +235,14 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 	CO_LOCK_CAN_SEND(CANmodule);
 	/* Abort message from CAN module, if there is synchronous TPDO.
 	 * Take special care with this functionality. */
-	if (/*messageIsOnCanBuffer && */CANmodule->bufferInhibitFlag)
+	uint32_t messageIsOnCanBuffer =
+			CAN_TransmitStatus(CANmodule->CANptr, 0)
+			? CAN_TransmitStatus(CANmodule->CANptr, 1)
+			? CAN_TransmitStatus(CANmodule->CANptr, 2) ? 3 : 2 : 1 : 0;
+	if (messageIsOnCanBuffer > 2 && CANmodule->bufferInhibitFlag)
 	{
 		/* clear TXREQ */
+		CAN_CancelTransmit(CANmodule->CANptr, messageIsOnCanBuffer);
 		CANmodule->bufferInhibitFlag = false;
 		tpdoDeleted = 1U;
 	}
@@ -275,6 +280,8 @@ static uint16_t rxErrors = 0, txErrors = 0, overflow = 0;
 void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 {
 	uint32_t err;
+	rxErrors = CAN_GetReceiveErrorCounter(CANmodule->CANptr);
+	txErrors = CAN_GetLSBTransmitErrorCounter(CANmodule->CANptr);
 
 	err = ((uint32_t) txErrors << 16) | ((uint32_t) rxErrors << 8) | overflow;
 
@@ -391,7 +398,7 @@ void CO_CANinterruptTx(CO_CANmodule_t *CANmodule)
 	/* transmit interrupt */
 
 	/* Clear interrupt flag */
-	//automatically clears on CAN_Transmit()
+	CAN_ClearITPendingBit(CANmodule->CANptr, CAN_IT_TME);
 
 	/* First CAN message (bootup) was sent successfully */
 	CANmodule->firstCANtxMessage = false;

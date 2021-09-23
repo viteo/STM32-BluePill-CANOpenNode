@@ -187,6 +187,7 @@ int main (void){
 
         /* Configure Timer interrupt function for execution every 1 millisecond */
         Device_Timer_Init();
+        DWT_Delay_Init();
 
         /* Configure CAN transmit and receive interrupt */
         CAN1_IT_Init();
@@ -231,6 +232,7 @@ int main (void){
             /* Process automatic storage */
 
             /* optional sleep for short time */
+            DWT_Delay_ms(5);
         }
     }
 
